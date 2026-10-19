@@ -66,9 +66,8 @@ client = genai.Client(api_key=api_key)
 # 3. โครงสร้างข้อมูลที่รับมาจากหน้าแอป (Frontend)
 class DiaryRequest(BaseModel):
     text: str
-    tags: list[str] = []
-    date: str = "Sep 16th, 2023"
-
+    tags: Optional[List[str]] = []
+    date: Optional[str] = None
 # 4. API Endpoint รับข้อความไดอารี่ แล้วส่งให้ AI วิเคราะห์
 @app.post("/api/reflect")
 async def reflect_diary(request: DiaryRequest):
