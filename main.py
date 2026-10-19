@@ -5,21 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
+from typing import Optional, List
+
+
 
 app = FastAPI()
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
 
-# เพิ่มส่วนนี้เข้าไป
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], # อนุญาตให้ทุกเว็บเรียกใช้งานได้
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 # 1. ตั้งค่า CORS เพื่ออนุญาตให้ Frontend (แอปของคุณ) ยิงเรียก API ได้โดยไม่ติดเรื่อง Security
 app.add_middleware(
     CORSMiddleware,
