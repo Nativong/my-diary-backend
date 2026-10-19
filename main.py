@@ -23,7 +23,7 @@ app.add_middleware(
 
 import httpx  # FastAPI มี httpx มาให้อยู่แล้ว
 
-# 📍 นำ URL ที่ก๊อปปี้มาจาก Google Apps Script มาวางตรงนี้
+#  นำ URL ที่ก๊อปปี้มาจาก Google Apps Script มาวางตรงนี้
 GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbxVDpsLm1fe0owpOLunLHziJHMQdRLF89EV7BcsRXU1gOmr8IoARmN5SU_m_QU1ChBQ/exec"
 
 @app.post("/api/reflect")
@@ -35,7 +35,7 @@ async def reflect_diary(request: DiaryRequest):
     )
     ai_reflection = response.text
 
-    # 💡 [ส่วนที่เพิ่มใหม่] ส่งข้อมูลเข้า Google Sheets อัตโนมัติ
+    #  [ส่วนที่เพิ่มใหม่] ส่งข้อมูลเข้า Google Sheets อัตโนมัติ
     try:
         async with httpx.AsyncClient() as http_client:
             await http_client.post(GOOGLE_SHEET_URL, json={
@@ -57,7 +57,7 @@ client = genai.Client(api_key=api_key)
 
 # 3. โครงสร้างข้อมูลที่รับมาจากหน้าแอป (Frontend)
 class DiaryRequest(BaseModel):
-    text: str
+    text: str = ""
     tags: Optional[List[str]] = []
     date: Optional[str] = None
 # 4. API Endpoint รับข้อความไดอารี่ แล้วส่งให้ AI วิเคราะห์
