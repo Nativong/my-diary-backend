@@ -2,7 +2,7 @@ import os
 import json
 import httpx
 from typing import Optional, List
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from google import genai
@@ -10,7 +10,6 @@ from google.genai import types
 
 app = FastAPI()
 
-# 1. ตั้งค่า CORS อนุญาตให้ Frontend ยิงเข้า API ได้
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,30 +18,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 2. URL สำหรับบันทึกลง Google Sheets
 GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbxVDpsLm1fe0owpOLunLHziJHMQdRLF89EV7BcsRXU1gOmr8IoARmN5SU_m_QU1ChBQ/exec"
 
-# 3. ตั้งค่า Gemini Client
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key:
     api_key = "นำ_API_KEY_ของคุณมาวางตรงนี้"
 
 client = genai.Client(api_key=api_key)
 
-# 4. โครงสร้างข้อมูลที่รับมาจาก Frontend (ต้องประกาศก่อนเรียกใช้ใน Endpoint)
 class DiaryRequest(BaseModel):
     text: str = ""
     tags: Optional[List[str]] = []
     date: Optional[str] = None
 
 
-# 5. API Endpoint หลัก (รวมทั้งการวิเคราะห์ AI และบันทึกลง Google Sheets)
+# 💡 ฟังก์ชันทำงานเบื้องหลังสำหรับส่งลง Google Sheets โดยไม่ขัดจังหวะผู้ใช้
+async def send_to_sheets_in_background(text: str, tags: list, reflection: str, date: str):
+    try:
+        async with httpx.AsyncClient() as http_client:
+            await http_client.post(GOOGLE_SHEET_URL, json={
+                "text": text,
+                "tags": tags,
+                "reflection": reflection,
+                "date": date
+            })
+    except Exception as e:
+        print(f"Failed to save to Google Sheets: {e}")
+
+
 @app.post("/api/reflect")
-async def reflect_diary(request: DiaryRequest):
+async def reflect_diary(request: DiaryRequest, background_tasks: BackgroundTasks):
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="กรุณากรอกข้อความไดอารี่ก่อนครับ")
 
-    # Prompt สั่งให้ Gemini วิเคราะห์เป็น JSON
     prompt = f"""
     คุณคือ AI ผู้เชี่ยวชาญด้านจิตวิทยาและการสะท้อนอารมณ์
     โปรดวิเคราะห์บันทึกประจำวันของผู้ใช้ต่อไปนี้:
@@ -58,7 +66,6 @@ async def reflect_diary(request: DiaryRequest):
     """
 
     try:
-        # เรียกใช้งาน Gemini API
         response = client.models.generate_content(
             model="gemini-3.8-flash",
             contents=prompt,
@@ -67,25 +74,21 @@ async def reflect_diary(request: DiaryRequest):
             ),
         )
 
-        # แปลงผลลัพธ์เป็น JSON
         result_json = json.loads(response.text)
         comment1 = result_json.get("comment1", "")
         comment2 = result_json.get("comment2", "")
         full_reflection = f"Comment 1: {comment1}\nComment 2: {comment2}"
 
-        # ส่งข้อมูลเข้า Google Sheets แบบเบื้องหลัง
-        try:
-            async with httpx.AsyncClient() as http_client:
-                await http_client.post(GOOGLE_SHEET_URL, json={
-                    "text": request.text,
-                    "tags": request.tags,
-                    "reflection": full_reflection,
-                    "date": request.date
-                })
-        except Exception as e:
-            print(f"Failed to save to Google Sheets: {e}")
+        # ⚡ สั่งให้เซฟลง Google Sheets แบบ Background Task (หน้าเว็บไม่ต้องรอ)
+        background_tasks.add_task(
+            send_to_sheets_in_background, 
+            request.text, 
+            request.tags, 
+            full_reflection, 
+            request.date
+        )
 
-        # ส่งค่ากลับไปหาหน้าเว็บ (Frontend)
+        # ส่งคำตอบกลับไปหน้าเว็บทันที
         return {
             "success": True,
             "comment1": comment1,
@@ -98,8 +101,6 @@ async def reflect_diary(request: DiaryRequest):
         raise HTTPException(status_code=500, detail=f"เกิดข้อผิดพลาดในการประมวลผล: {str(e)}")
 
 
-# 6. คำสั่งรันเซิร์ฟเวอร์
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=5000, reload=True)
-    
