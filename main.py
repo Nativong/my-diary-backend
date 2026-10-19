@@ -29,6 +29,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import httpx  # FastAPI มี httpx มาให้อยู่แล้ว
+
+# 📍 นำ URL ที่ก๊อปปี้มาจาก Google Apps Script มาวางตรงนี้
+GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbxVDpsLm1fe0owpOLunLHziJHMQdRLF89EV7BcsRXU1gOmr8IoARmN5SU_m_QU1ChBQ/exec"
+
+@app.post("/api/reflect")
+async def reflect_diary(request: DiaryRequest):
+    # --- โค้ดเรียกใช้ Gemini AI เดิมของคุณ ---
+    response = client.models.generate_content(
+        model="gemini-3.8-flash",
+        contents=request.text
+    )
+    ai_reflection = response.text
+
+    # 💡 [ส่วนที่เพิ่มใหม่] ส่งข้อมูลเข้า Google Sheets อัตโนมัติ
+    try:
+        async with httpx.AsyncClient() as http_client:
+            await http_client.post(GOOGLE_SHEET_URL, json={
+                "text": request.text,
+                "tags": request.tags,
+                "reflection": ai_reflection
+            })
+    except Exception as e:
+        print(f"Failed to save to Google Sheets: {e}")
+
+    return {"reflection": ai_reflection}
 # 2. ตั้งค่า Gemini Client (ดึงคีย์จาก $env:GEMINI_API_KEY)
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key:
